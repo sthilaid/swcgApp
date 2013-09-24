@@ -3,15 +3,23 @@ package main
 
 import (
         "swcg"
-	"fmt"
-	"encoding/json"
+	//"fmt"
+	//"encoding/json"
 )
 
+type toto struct {
+	x int
+	y int
+}
+
 func main() {
-	bytes, e := json.Marshal(swcg.CreateDB())
-	if e != nil {
-		fmt.Print(e.Error())
-	} else {
-		fmt.Print(string(bytes))
-	}
+	swcg.AnalyzeDB(swcg.CreateDB())
+
+	// bytes, e := json.Marshal(cards)
+	// if e != nil {
+	// 	fmt.Print(e.Error())
+	// } else {
+	// 	fmt.Print(string(bytes))
+	// }
+	// fmt.Print("\n")
 }
