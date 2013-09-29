@@ -11,7 +11,7 @@ import (
 
 // Templates  -----------------------------------------------------------------
 
-var templates = template.Must(template.ParseFiles("card.html"))
+var templates = template.Must(template.ParseFiles("card.html", "set.html"))
 
 func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
 	err := templates.ExecuteTemplate(w, tmpl+".html", data)
@@ -19,6 +19,53 @@ func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
+
+// Set View ------------------------------------------------------------------
+
+const SetViewPath = "/set/"
+
+type SetView struct {
+	SetName string
+	Cards   template.HTML
+}
+
+func SetCardsHTML(set *swcg.ObjectiveSetDB) template.HTML {
+	out := ""
+	for _, c := range *set {
+		out += "<div class=\"SetCard\">"
+		out += fmt.Sprintf("<a href=\"/card/%d\">%s</a>",
+			c.Number, c.Name)
+		out += "</div>\n"
+	}
+	return template.HTML(out)
+}
+
+func CreateSetView(set *swcg.ObjectiveSetDB) *SetView {
+	if set == nil {
+		panic("CreateSetView called with nil pointer")
+	}
+
+	view := new(SetView)
+	view.SetName = set[0].Name
+	view.Cards   = SetCardsHTML(set)
+	return view
+}
+
+func setViewHandler(w http.ResponseWriter, r *http.Request) {
+	index, err := strconv.Atoi(r.URL.Path[len(SetViewPath):])
+	if err != nil {
+		http.Error(w, "Invalid Set ID Number", http.StatusInternalServerError)
+		return
+	}
+	if (*CardDataCache.SetMap)[index] == nil {
+		http.Error(w, fmt.Sprintf("Set Number %d not present in DataBase", index), http.StatusInternalServerError)
+		return
+	}
+	data := CreateSetView((*CardDataCache.SetMap)[index])
+	renderTemplate(w, "set", data)
+}
+
+
 
 // Card View ------------------------------------------------------------------
 
@@ -35,7 +82,7 @@ type CardView struct {
 	AbilitiesHTML   template.HTML
 	Health          int
 	Quote           string
-	ObjectiveSets   string
+	ObjectiveSets   template.HTML
 	Set             string
 	Number          int
 }
@@ -51,16 +98,17 @@ func CombatIconsHTML(ci *swcg.CardCombatIcons) string {
 		ci.BlastDamage[0], ci.BlastDamage[1])
 }
 
-func ObjectiveSetsHTML(sets *[]swcg.ObjectiveSet) string {
+func ObjectiveSetsHTML(sets *[]swcg.ObjectiveSet) template.HTML {
 	out := ""
 	size := len(*sets)
 	for i, set := range *sets {
-		out += fmt.Sprintf("%d (%d/6)", set.SetId, set.CardSetNumber)
+		out += fmt.Sprintf("<a href=\"/set/%d\">%d</a> (%d/6)",
+			set.SetId, set.SetId, set.CardSetNumber)
 		if i < size -1 {
 			out += ", "
 		}
 	}
-	return out
+	return template.HTML(out)
 }
 
 func AbilitiesHTML(abilities *[]swcg.AbilityInterface) string {
@@ -103,7 +151,7 @@ func AbilitiesHTML(abilities *[]swcg.AbilityInterface) string {
 	return traitsStr + out
 }
 
-func CreateView(c *swcg.Card) *CardView {
+func CreateCardView(c *swcg.Card) *CardView {
 	v := new(CardView)
 
 	v.Name       	  = c.Name
@@ -134,9 +182,11 @@ func cardViewHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Card Number %d not present in DataBase", index), http.StatusInternalServerError)
 		return
 	}
-	data := CreateView((*CardDataCache.CardMap)[index])
+	data := CreateCardView((*CardDataCache.CardMap)[index])
 	renderTemplate(w, "card", data)
 }
+
+// MAIN -----------------------------------------------------------------------
 
 var AllCards      []swcg.Card
 var CardDataCache *swcg.DataCache
@@ -144,5 +194,6 @@ var CardDataCache *swcg.DataCache
 func main() {
 	AllCards, CardDataCache = swcg.AnalyzeDB(swcg.CreateDB())
 	http.HandleFunc(CardViewPath, cardViewHandler)
+	http.HandleFunc(SetViewPath, setViewHandler)
 	http.ListenAndServe(":8080", nil)
 }
